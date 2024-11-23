@@ -119,9 +119,9 @@ int still_processing()
 /* Determine next event and advance sim clock */
 int timing()
 {
+  printf("\nsim clock: %f\n",sim_clock);
   // Determine next event
   int next_event_type = 0;
-  int processing = 1;
   float min_time;
   
   // Prevents new arrivals past the simulation closing time
@@ -130,30 +130,29 @@ int timing()
 	next_event_type = 1;
   } else{
 	min_time = FLT_MAX-1;
-	processing = still_processing();
-  }
 
-  // Allows the simulation to continue running until all customers have departed
-  if (processing == 1){
-    // Iterates through servers to find if a departure is the most imminent event
-    for (int i = 2; i < (num_servers+2); i++)
-    {
-      if (event_list[i] < min_time)
-	  {
-	    min_time = event_list[i];
-	    next_event_type = i;
+    // Allows the simulation to continue running until all customers have departed
+    if (still_processing() == 1){
+      // Iterates through servers to find if a departure is the most imminent event
+      for (int i = 2; i < (num_servers+2); i++)
+      {
+        if (event_list[i] < min_time)
+	    {
+	      min_time = event_list[i];
+	      next_event_type = i;
+	    }
+      }
+    } else { // Simulation complete
+	  printf("sim complete\n");
+	  // Set time to end duration if less
+	  if (sim_clock < end_time){
+	  	min_time = end_time;
+	  } else{
+	    min_time = sim_clock;
 	  }
+	  next_event_type = 0;
     }
-  } else { // Simulation complete
-	// Set time to end duration if less
-	if (sim_clock < end_time){
-		min_time = end_time;
-	} else{
-	  min_time = sim_clock;
-	}
-	next_event_type = 0;
   }
-  
   // Advance sim clock
   sim_clock = min_time;
   
@@ -178,6 +177,7 @@ int find_idle_server()
 /* Next departure event */
 void depart(int server_index)
 {
+  printf("event list 1 before depart: %f\n\n",event_list[1]);
   // Decrease index by 2 to account for end time and arrival
   server_index -= 2;
   //printf("server_index: %d\n",server_index);
@@ -188,17 +188,23 @@ void depart(int server_index)
     
   // Remove departure from consideration
   *(event_list + server_index + 2) = FLT_MAX;
-
+  printf("event list 1 after depart: %f\n\n",event_list[1]);
 }
 
 /* Next arrival event */
 void arrive(int server_index)
 { 
+  printf("event list 1 before arrival: %f\n",event_list[1]);
   // Decrease index by 2 to account for end time and arrival
   server_index -= 2;
 
   // Schedule next arrival
-  *(event_list + 1) = sim_clock + gen_rand_exponential(mean_interarrival);
+  float rand_value = gen_rand_exponential(mean_interarrival);
+  *(event_list + 1) = sim_clock + rand_value;
+  printf("rand value: %f\n",rand_value);
+  printf("sim_clock: %f\n",sim_clock);
+  printf("sim_clock + rand_vlue: %f",sim_clock+rand_value);
+  printf("after scheduled arrival: %f\n",event_list[1]);
   
   // Find an idle server
   int idle_server = find_idle_server();
@@ -212,10 +218,12 @@ void arrive(int server_index)
     
     // Schedule departure event for current customer
     *(event_list + idle_server + 2) = sim_clock + gen_rand_exponential(mean_service);
+    printf("after scheduled departure (shouldnt change): %f\n",event_list[1]);
   } else {
     // Customer is lost
 	customers_lost++;
   }
+  printf("event list 1 after arrival: %f\n",event_list[1]);
 }
 
 /* Generate random uniformly distribute variate between 0 and 1 */
@@ -230,7 +238,7 @@ float gen_rand_uniform()
 /* Generate random exponentially distributed variate between 0 and 1 with a mean of beta */
 float gen_rand_exponential(float beta)
 {
-  return -1 * beta * log(gen_rand_uniform());
+  return (-1 / beta) * log(1-gen_rand_uniform());
 } 
 
 int main(void)
@@ -259,11 +267,9 @@ int main(void)
 
   // Simulation Loop
   do {
-	//printf("num in q: %d\n", num_in_q);
-	//printf("sim clock: %f\n\n",sim_clock);
     // Timing event to determine next event
     event_type = timing();
-    
+    printf("event type: %d\n",event_type);
     // Update Time Average Statistical Counters
     update_time_avg_stats();
     
