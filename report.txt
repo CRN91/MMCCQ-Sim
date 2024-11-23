@@ -1,4 +1,4 @@
-Multiple Server Queueing System Simulation Report
+Multiple Server Queueing System with Loss Simulation Report
 
 Input parameters
 Number of servers:          2 servers
@@ -7,7 +7,6 @@ Mean service time:          0.500000 minutes
 Stop accepting arrivals at: 480.000000 minutes
 
 Simulation stats
-Average delay in the queue: 0.038 minutes
-Average queue length:       0.040 customers
-Average server utilisation: 25.949%
-Duration of simulation:     480.679 minutes
+Number of customers lost:   46 customers
+Average server utilisation: 24.916%
+Duration of simulation:     480.027 minutes

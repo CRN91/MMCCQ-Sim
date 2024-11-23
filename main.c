@@ -8,8 +8,8 @@
 #define BUSY 1
 #define IDLE 0
 
-float mean_interarrival, mean_service, uniform_rand, sim_clock, time_last_event, total_time_delayed, area_num_in_q, area_server_status, time_arrival[Q_LIMIT+1], end_time;
-int delays_required, num_in_q, customers_delayed, event_type, num_servers;
+float mean_interarrival, mean_service, uniform_rand, sim_clock, time_last_event, total_time_delayed, area_server_status, end_time;
+int delays_required, num_in_q, customers_delayed, event_type, num_servers, customers_lost;
 int *server_status;
 float *event_list;
 
@@ -33,6 +33,7 @@ void initialise_sim(void)
   sim_clock = 0.0;
   num_in_q = 0;
   time_last_event = 0;
+  customers_lost = 0;
   
   // Allocate memory for the server status array
   server_status = (int* )malloc(num_servers * sizeof(int));
@@ -70,19 +71,8 @@ void initialise_sim(void)
   // Initialise Statistical Counters
   customers_delayed = 0;
   total_time_delayed = 0.0;
-  area_num_in_q = 0.0;
   area_server_status = 0.0;
-  
-  // Initialise event list
 
-  
-  // Set all values in queue to -1
-  for (int i = 0; i < Q_LIMIT; i++)
-  {
-    time_arrival[i] = -1;
-  }
-  
-  //printf("arrival: %f\ndeparture: %f\n", event_list[0], event_list[1]);
 }
 
 /* Update time average stats */
@@ -97,7 +87,6 @@ void update_time_avg_stats()
   The area_server_status is the cumulative area under the graph with y axis being the server utilisation (0 or 1 for idle / busy) and the
   x axis is time. This will allow us to calculate the proportion of server utilisation during the simulation. */
   
-  area_num_in_q += num_in_q * time_since_last_event;
   for (int i = 0; i < num_servers; i++)
   {
 	area_server_status += server_status[i] * time_since_last_event;
@@ -108,11 +97,9 @@ void update_time_avg_stats()
 void write_report(FILE * report)
 {
   // Average delay and size in the queue and server utilisation | sim_clock should be total time at the end of the sim
-  float avg_q_delay = total_time_delayed / customers_delayed;
-  float avg_q_size = area_num_in_q / sim_clock;
   float server_utilisation = area_server_status / sim_clock / num_servers;
   
-  fprintf(report, "\nSimulation stats\nAverage delay in the queue: %0.3f minutes\nAverage queue length: %11.3f customers\nAverage server utilisation: %0.3f%%\nDuration of simulation: %11.3f minutes", avg_q_delay, avg_q_size, server_utilisation*100, sim_clock);
+  fprintf(report, "\nSimulation stats\nNumber of customers lost: %4d customers\nAverage server utilisation: %0.3f%%\nDuration of simulation: %11.3f minutes", customers_lost, server_utilisation*100, sim_clock);
 }
 
 /* Returns 1 if at least 1 server is busy and 0 if all servers are idle */
@@ -196,31 +183,12 @@ void depart(int server_index)
   //printf("server_index: %d\n",server_index);
   //printf("queue 0: %f\n", time_arrival[0]);
 
-  // If queue is empty
-  if (time_arrival[0] == -1){ 
-    // Make server idle
-    server_status[server_index] = IDLE;
+  // Make server idle
+  server_status[server_index] = IDLE;
     
-    // Remove departure from consideration
-    *(event_list + server_index + 2) = FLT_MAX;
-  } else{
-    // Reduce the queue by 1
-    num_in_q--;
-    
-    // Compute delay of customer entering service
-    total_time_delayed += sim_clock - time_arrival[0];
-    customers_delayed++;
-    
-    // Schedule departure event
-    *(event_list + server_index + 2) = sim_clock + gen_rand_exponential(mean_service);
-    
-    // Move other customers in the queue up one place
-    for (int i = 0; i < num_in_q; i++)
-    {
-      time_arrival[i] = time_arrival[i+1];
-    }
-    time_arrival[num_in_q] = -1;
-  }
+  // Remove departure from consideration
+  *(event_list + server_index + 2) = FLT_MAX;
+
 }
 
 /* Next arrival event */
@@ -245,17 +213,8 @@ void arrive(int server_index)
     // Schedule departure event for current customer
     *(event_list + idle_server + 2) = sim_clock + gen_rand_exponential(mean_service);
   } else {
-    // Stop simulation if queue is full
-    if (num_in_q > Q_LIMIT){
-      printf("Error! Stack Overflow in queue");
-      exit(1);
-    }
-    
-    // Add new customer to the queue
-    time_arrival[num_in_q] = sim_clock;
-    
-    // Number of customers in queue increases by 1
-    num_in_q++;
+    // Customer is lost
+	customers_lost++;
   }
 }
 
@@ -293,7 +252,7 @@ int main(void)
   fclose(config);
   
   // Write heading of report
-  fprintf(report, "Multiple Server Queueing System Simulation Report\n\nInput parameters\nNumber of servers: %10d servers\nMean interarrival time: %12f minutes\nMean service time: %17f minutes\nStop accepting arrivals at: %f minutes\n",num_servers, mean_interarrival, mean_service, end_time);
+  fprintf(report, "Multiple Server Queueing System with Loss Simulation Report\n\nInput parameters\nNumber of servers: %10d servers\nMean interarrival time: %12f minutes\nMean service time: %17f minutes\nStop accepting arrivals at: %f minutes\n",num_servers, mean_interarrival, mean_service, end_time);
   
   // Initialise sim
   initialise_sim();
