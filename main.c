@@ -8,8 +8,8 @@
 #define BUSY 1
 #define IDLE 0
 
-float mean_interarrival, mean_service, uniform_rand, sim_clock, time_last_event, total_time_delayed, area_server_status, end_time;
-int delays_required, num_in_q, customers_delayed, event_type, num_servers, customers_lost;
+float mean_interarrival, mean_service, sim_clock, time_last_event, area_server_status, end_time;
+int customers_delayed, event_type, num_servers, customers_lost;
 int *server_status;
 float *event_list;
 
@@ -31,7 +31,6 @@ void initialise_sim(void)
 
   // Initialise Sim Variables
   sim_clock = 0.0;
-  num_in_q = 0;
   time_last_event = 0;
   customers_lost = 0;
   
@@ -70,7 +69,6 @@ void initialise_sim(void)
 
   // Initialise Statistical Counters
   customers_delayed = 0;
-  total_time_delayed = 0.0;
   area_server_status = 0.0;
 
 }
@@ -98,8 +96,9 @@ void write_report(FILE * report)
 {
   // Average delay and size in the queue and server utilisation | sim_clock should be total time at the end of the sim
   float server_utilisation = area_server_status / sim_clock / num_servers;
-  
-  fprintf(report, "\nSimulation stats\nNumber of customers lost: %4d customers\nAverage server utilisation: %0.3f%%\nDuration of simulation: %11.3f minutes", customers_lost, server_utilisation*100, sim_clock);
+  float total_customers = customers_lost + customers_delayed;
+  float blocking_probability = (float)customers_lost / total_customers;
+  fprintf(report, "\nSimulation stats\nNumber of customers lost: %4d customers\nTotal Customers: %22f\nBlocking probability: %11.3f%%\nAverage server utilisation: %0.3f%%\nDuration of simulation: %13.3f seconds", customers_lost, total_customers, blocking_probability*100, server_utilisation*100, sim_clock);
 }
 
 /* Returns 1 if at least 1 server is busy and 0 if all servers are idle */
@@ -180,8 +179,6 @@ void depart(int server_index)
 {
   // Decrease index by 2 to account for end time and arrival
   server_index -= 2;
-  //printf("server_index: %d\n",server_index);
-  //printf("queue 0: %f\n", time_arrival[0]);
 
   // Make server idle
   server_status[server_index] = IDLE;
@@ -202,8 +199,9 @@ void arrive(int server_index)
   // Find an idle server
   int idle_server = find_idle_server();
 
+  // If a server is available assign the customer to that server
   if (idle_server != -1){
-    // Add 1 to customers delayed but don't add any time delayed as they are served instantly
+    // Add 1 to customers delayed
     customers_delayed++;
   
     // Make server busy
@@ -249,7 +247,7 @@ int main(void)
   fclose(config);
   
   // Write heading of report
-  fprintf(report, "Multiple Server Queueing System with Loss Simulation Report\n\nInput parameters\nNumber of servers: %10d servers\nMean interarrival time: %12f minutes\nMean service time: %17f minutes\nStop accepting arrivals at: %f minutes\n",num_servers, mean_interarrival, mean_service, end_time);
+  fprintf(report, "Multiple Server Queueing System with Loss Simulation Report\n\nInput parameters\nNumber of servers: %11d servers\nMean interarrival time: %13f seconds\nMean service time: %19f seconds\nStop accepting arrivals at: %f seconds\n",num_servers, mean_interarrival, mean_service, end_time);
   
   // Initialise sim
   initialise_sim();

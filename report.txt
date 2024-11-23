@@ -1,12 +1,14 @@
 Multiple Server Queueing System with Loss Simulation Report
 
 Input parameters
-Number of servers:         16 servers
-Mean interarrival time:     0.010000 minutes
-Mean service time:        100.000000 minutes
-Stop accepting arrivals at: 28800.000000 minutes
+Number of servers:          16 servers
+Mean interarrival time:     10.000000 seconds
+Mean service time:          100.000000 seconds
+Stop accepting arrivals at: 28800.000000 seconds
 
 Simulation stats
-Number of customers lost: 2878594 customers
-Average server utilisation: 80.344%
-Duration of simulation:   29144.854 minutes
+Number of customers lost:   66 customers
+Total Customers:            2902.000000
+Blocking probability:       2.274%
+Average server utilisation: 61.876%
+Duration of simulation:     29065.027 seconds
