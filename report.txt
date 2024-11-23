@@ -7,6 +7,6 @@ Mean service time:        100.000000 minutes
 Stop accepting arrivals at: 28800.000000 minutes
 
 Simulation stats
-Number of customers lost:  276 customers
-Average server utilisation: 0.000%
-Duration of simulation:   28800.000 minutes
+Number of customers lost: 2878594 customers
+Average server utilisation: 80.344%
+Duration of simulation:   29144.854 minutes
