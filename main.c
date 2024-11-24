@@ -8,7 +8,7 @@
 #define BUSY 1
 #define IDLE 0
 
-float mean_interarrival, mean_service, sim_clock, time_last_event, area_server_status, end_time;
+float mean_interarrival, mean_service, sim_clock, time_last_event, area_server_status, end_time, cumulative_arrival_rate;
 int customers_delayed, event_type, num_servers, customers_lost;
 int *server_status;
 float *event_list;
@@ -16,7 +16,10 @@ float *event_list;
 void arrive(int);
 void depart(int);
 void update_time_avg_stats(void);
+void gen_sim_csv(void);
+void run_sim(void);
 void write_report(FILE *);
+void write_csv(FILE *);
 int timing(void);
 int find_idle_server(void);
 int still_processing(void);
@@ -32,7 +35,6 @@ void initialise_sim(void)
   // Initialise Sim Variables
   sim_clock = 0.0;
   time_last_event = 0;
-  customers_lost = 0;
   
   // Allocate memory for the server status array
   server_status = (int* )malloc(num_servers * sizeof(int));
@@ -70,7 +72,8 @@ void initialise_sim(void)
   // Initialise Statistical Counters
   customers_delayed = 0;
   area_server_status = 0.0;
-
+  customers_lost = 0;
+  cumulative_arrival_rate = 0;
 }
 
 /* Update time average stats */
@@ -80,11 +83,7 @@ void update_time_avg_stats()
   float time_since_last_event = sim_clock - time_last_event; // Delta x in equations
   time_last_event = sim_clock;
   
-  /* Update stats where area_num_in_q is the cumulative area under the graph where the y axis is the number of customers in the queue
-  and the x axis is the time. We can later use this to calculate the average number of customers in the queue during the simulation.
-  The area_server_status is the cumulative area under the graph with y axis being the server utilisation (0 or 1 for idle / busy) and the
-  x axis is time. This will allow us to calculate the proportion of server utilisation during the simulation. */
-  
+  // If server status is idle it multiplies by 0 so adds nothing, if its busy it multiplies by 1 creating a cumulative total
   for (int i = 0; i < num_servers; i++)
   {
 	area_server_status += server_status[i] * time_since_last_event;
@@ -98,7 +97,15 @@ void write_report(FILE * report)
   float server_utilisation = area_server_status / sim_clock / num_servers;
   float total_customers = customers_lost + customers_delayed;
   float blocking_probability = (float)customers_lost / total_customers;
-  fprintf(report, "\nSimulation stats\nNumber of customers lost: %4d customers\nTotal Customers: %22f\nBlocking probability: %11.3f%%\nAverage server utilisation: %0.3f%%\nDuration of simulation: %13.3f seconds", customers_lost, total_customers, blocking_probability*100, server_utilisation*100, sim_clock);
+  fprintf(report, "\nSimulation stats\nNumber of customers lost: %5d customers\nTotal Customers: %22f\nBlocking probability: %14f%%\nAverage server utilisation: %0f%%\nActual arrival rate: %16f seconds\nDuration of simulation: %16f seconds", customers_lost, total_customers, blocking_probability*100, server_utilisation*100, cumulative_arrival_rate/total_customers, sim_clock);
+}
+
+void write_csv(FILE * csv)
+{
+  float server_utilisation = area_server_status / sim_clock / num_servers;
+  float total_customers = customers_lost + customers_delayed;
+  float blocking_probability = (float)customers_lost / total_customers;
+  fprintf(csv,"%f,%f,%f\n",cumulative_arrival_rate/total_customers,blocking_probability,server_utilisation);
 }
 
 /* Returns 1 if at least 1 server is busy and 0 if all servers are idle */
@@ -165,6 +172,7 @@ int find_idle_server()
   // Not found return -1
   int idle_server = -1;
 
+  // Finds next idle server checking in order
   for (int i = 0; i < num_servers; i++){
     if (server_status[i] == IDLE){
       idle_server = i;
@@ -194,7 +202,9 @@ void arrive(int server_index)
   server_index -= 2;
 
   // Schedule next arrival
-  *(event_list + 1) = sim_clock + gen_rand_exponential(mean_interarrival);
+  float gen_arrival = gen_rand_exponential(mean_interarrival);
+  *(event_list + 1) = (sim_clock + gen_arrival);
+  cumulative_arrival_rate += gen_arrival;
   
   // Find an idle server
   int idle_server = find_idle_server();
@@ -226,7 +236,52 @@ float gen_rand_uniform()
 float gen_rand_exponential(float beta)
 {
   return -1 * beta * log(1 - gen_rand_uniform());
-} 
+}
+
+void gen_sim_csv(void)
+{
+  FILE *csv;
+
+  // Open csv
+  csv = fopen("sim_data.csv","w");
+  // Write csv heading
+  fprintf(csv,"Interarrival rate,Blocking probability,Server utilisation\n");
+
+  // Run simulation 100 times
+  for (int i = 0; i < 90; i++)
+  {
+	run_sim();
+	mean_interarrival++;
+	write_csv(csv);
+  }
+  fclose(csv);
+}
+
+void run_sim(void)
+{
+  // Initialise sim
+  initialise_sim();
+
+  // Simulation Loop
+  do {
+    // Timing event to determine next event
+	event_type = timing();
+	// Update Time Average Statistical Counters
+	update_time_avg_stats();
+
+	// Call correct event function
+	switch (event_type){
+	case 0: // end time
+	  break;
+	case 1: // arrival
+	  arrive(event_type);
+	  break;
+	default:
+	  depart(event_type);
+	  break;
+	}
+  } while (event_type != 0);
+}
 
 int main(void)
 {
@@ -246,37 +301,22 @@ int main(void)
   fscanf(config, "%f %f %f %d", &mean_interarrival, &mean_service, &end_time, &num_servers);
   fclose(config);
   
-  // Write heading of report
-  fprintf(report, "Multiple Server Queueing System with Loss Simulation Report\n\nInput parameters\nNumber of servers: %11d servers\nMean interarrival time: %13f seconds\nMean service time: %19f seconds\nStop accepting arrivals at: %f seconds\n",num_servers, mean_interarrival, mean_service, end_time);
+  // Default behaviour is to run the sim once, if set to 0 will run 100 times which generates a csv I use for my coursework
+  int single_run = 1;
+  if (single_run == 1)
+  {
+    // Write heading of report
+    fprintf(report, "Multiple Server Queueing System with Loss Simulation Report\n\nInput parameters\nNumber of servers: %11d servers\nMean interarrival time: %13f seconds\nMean service time: %19f seconds\nStop accepting arrivals at: %f seconds\n",num_servers, mean_interarrival, mean_service, end_time);
   
-  // Initialise sim
-  initialise_sim();
+    //Run the simulation
+    run_sim();
 
-  // Simulation Loop
-  do {
-    // Timing event to determine next event
-    event_type = timing();
-    // Update Time Average Statistical Counters
-    update_time_avg_stats();
-    
-    //printf("cust_delay: %d\ntotal time delayed: %f\n", customers_delayed, total_time_delayed);
-    
-    // Call correct event function
-    switch (event_type){
-      case 0: // end time
-    	break;
-      case 1: // arrival
-        arrive(event_type);
-        break;
-      default:
-        depart(event_type);
-        break;
-    }
-  } while (event_type != 0);
-  //printf("final time: %f",sim_clock);
-  // Call the report writing function
-  write_report(report);
-  fclose(report);
+    // Call the report writing function
+    write_report(report);
+    fclose(report);
+  } else{
+	gen_sim_csv();
+  }
   
   return 0;
 }
